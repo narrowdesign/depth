@@ -1,0 +1,391 @@
+/* Author: Nick Jones
+
+*/
+$(document).ready(function() {
+	cache : false;
+	var win = $(window);
+	var doc = $(document);
+	var initialized = false;	
+	
+	var targX = 0;
+	var label;
+	var fHeight = 0;
+	var xLoc;
+	var zLoc=0;
+	var zLocTarg;
+	var numMessages = $('.fact').length-1
+	var touchEnabled = Modernizr.touch;
+
+	var transform3d;
+	transform3d = Modernizr.csstransforms3d;
+
+	var touchStartX;
+	var touchStartY;
+	var started = false; // touch
+	var smallScreen = false;
+
+	var invalidEmailMessage = 'enter a valid email address';
+	var red = "#f85534";
+	var blue = "#50c2c2";
+	var darkColor = '#343837';
+	var borderColor = '#E0DFDB'
+	var events = {
+		init: function(){
+			window.scrollTo(0, 1);
+			if(win.width() < 768){
+				smallScreen = true;
+			}
+			$("h1,#sub-head").each(function() { // fix orphans
+				if($(this).attr('id') != "end"){
+			        var wordArray = $(this).text().split(" ");
+			        wordArray[wordArray.length-2] += "&nbsp;" + wordArray[wordArray.length-1];
+			        wordArray.pop();
+			        $(this).html(wordArray.join(" "));
+			    }
+			});
+			win.bind('resize', pageResize);
+			win.bind('keydown',keyHandler);
+			$("#scrubber").mouseover(function(e){
+				$('.drag-label').eq(numMessages).html('<div id="drag-arrow">→</div>HELLO,</div>');
+			});
+			$("#scrubber").mouseout(function(e){
+				$('.drag-label').eq(numMessages).html('<div id="drag-arrow">→</div>DRAG</div>');
+			});			
+			$("#scrubber").mousedown(function(e){
+				e.preventDefault();
+				e.stopPropagation();
+				scrubMX = e.pageX+$('#track').offset().left-$(this).offset().left;
+				win.mousemove(function(e){
+					e.preventDefault();
+					moveScrubber(scrubMX,e.pageX+$('#track').offset().left);
+				})
+				$('#scrubber').css({
+					'-webkit-transition-duration':'0s',
+					'-moz-transition-duration':'0s',
+					'-ms-transition-duration':'0s',
+					'transition-duration':'0s'
+				})	
+			});
+			$('.next-arrow').click(function(){
+				next();
+			})
+			$(win).mouseup(function(){
+				win.unbind('mousemove');
+			});
+			win.bind('mousewheel', function(eventData,deltaY) {
+				if(!smallScreen){
+					eventData.preventDefault();
+	    			moveScrubber(0,$("#scrubber").offset().left+-deltaY*23)
+	    			$('#scrubber').css({
+						'-webkit-transition-duration':'0s',
+						'-moz-transition-duration':'0s',
+						'-ms-transition-duration':'0s',
+						'transition-duration':'0s'
+					})
+				}else{
+
+				}
+			});
+			$('#scrubber').bind('touchstart', function(e){
+				win.bind('touchmove', function(e){
+					e.preventDefault();
+		 			var touch = e.originalEvent.touches[0] || e.originalEvent.changedTouches[0];
+		 			moveScrubber(0,$("#scrubber").offset().left+((touch.pageX-touchStartX)*2.2));
+		 			$('#scrubber').css({
+						'-webkit-transition-duration':'0s',
+						'-moz-transition-duration':'0s',
+						'-ms-transition-duration':'0s',
+						'transition-duration':'0s'
+					})
+					touchStartX = touch.pageX;
+				});
+			});
+			win.bind('touchstart',function(e){
+				var touch = e.originalEvent.touches[0] || e.originalEvent.changedTouches[0];
+				touchStartY = touch.pageY;
+				touchStartX = touch.pageX;
+			})
+			win.bind('touchend',function(e){
+				win.unbind('touchmove');
+			})
+			$('#facts-holder').bind('touchmove', function(e){
+				e.preventDefault();
+	 			var touch = e.originalEvent.touches[0] || e.originalEvent.changedTouches[0];
+	 			moveScrubber(0,$("#scrubber").offset().left+((touch.pageY-touchStartY)));
+	 			$('#scrubber').css({
+					'-webkit-transition-duration':'0s',
+					'-moz-transition-duration':'0s',
+					'-ms-transition-duration':'0s',
+					'transition-duration':'0s'
+				})
+	 			touchStartY = touch.pageY;
+
+			});
+//create markers
+			for (var i = numMessages; i >= 0; i--) {
+				if(i==0){
+					$('#track').append('<div class="marker" style="margin-left:54px;left:'+((i/numMessages)*87.6)+'%"></div>');
+				}else if(i!=numMessages){
+					$('#track').append('<div class="marker" style="margin-left:54px;left:'+((i/numMessages)*87.6)+'%"></div>');
+				}else{
+					$('#track').append('<div id="last-marker" style="margin-left:38px;left:'+((i/numMessages)*87.2)+'%">YOU</div>');
+				}
+				$('.fact').eq(i).data('zLoc',i-1*-40);
+				if(transform3d){
+					$('.fact').eq(i).css({
+						'-webkit-transform':'translateZ('+i-1*-40+'px)',
+						'-moz-transform':'translateZ('+i-1*-40+'px)',
+						'-ms-transform':'translateZ('+i-1*-40+'px)',
+						'transform':'translateZ('+i-1*-40+'px)'
+					})
+				}else{
+					$('.fact').eq(i).css({
+						top:i*390+'px',
+						opacity:1
+					})
+					$('#facts-holder').css({
+						top:0
+					})
+				}
+				fHeight = Math.max((i*290),fHeight);
+			};
+// create drag-labels			
+			for(var i=numMessages;i>=0;i--){
+				if(i==0){
+					myLabel = 'DRAG';
+				}else{
+					myLabel = $('.fact').eq(i).attr('label');
+				}
+				$('#drag-labels').append(' \
+						<div class="drag-label"><div id="drag-arrow">→</div>'+myLabel+'</div>');
+				label = $('.drag-label').eq(numMessages-i);
+				label.css({
+					'top':i*(fHeight/numMessages)/numMessages
+				})
+				for (var j = numMessages; j >= 0; j--) {
+					if(j == i){
+						label.css({
+							color:'#fff'
+						})
+					}
+				}
+			}
+			$('.marker').click(function(e){
+				moveScrubber(0,$(this).offset().left-54);
+				$('#scrubber').css({
+					'-webkit-transition-duration':'.3s',
+					'-moz-transition-duration':'.3s',
+					'-ms-transition-duration':'.3s',
+					'transition-duration':'.3s'
+				});
+			});
+			$('.drag-label').eq(0).click(function(e){
+				$("#email").focus();
+			})
+			$('#last-marker').click(function(e){
+				$("#email").focus();
+				moveScrubber(0,$(this).offset().left-32);
+			})
+			$('#email').blur(function(){
+				clearError();
+			});
+			$('#email').click(function(){
+				if($("#email").val() == invalidEmailMessage){
+					$("#email").attr('value',"");
+					$('#email').css({
+						'border-color':blue,
+						'color':darkColor
+					})
+				}
+			})
+			// submit the form	
+			$("#end").click(function(){
+				$("#email").focus();
+				$('#email').css({
+					'border-color':red,
+					'color':darkColor
+				})
+			});
+			$("form").submit(function() {
+				submitForm();return false; });
+			$(".button").click(function(){
+				submitForm();
+			});	
+			$('.button').mousedown(function(){
+				$(this).addClass('button-down');
+			})
+			pageResize('e');
+
+			function submitForm(){
+				//validate email form
+				if($("#email").val() == '' || validateEmail($("#email").val()) === false){
+					$("#email").attr("value",invalidEmailMessage);
+					$("#email").focus();
+					$('#email').css({
+						'border-color':red,
+						'color':red
+					})
+					return false;
+				}
+				//Ajax call to dispatch data to backend
+				$.ajax({
+					type: "POST",
+					url: "/index.php",
+					data: { email: $("#email").val() }
+				}).done(function( msg ) {
+					$('#email').css({
+						'border-color':blue,
+						'color':darkColor,
+					})
+					$("#email").attr("value","we’ll be in touch!");
+					$('#last-marker').click();
+					if(msg == 0){
+						$("#email").attr("value", "Hello again! We’ll be in touch ASAP.");
+						$("#email").focus();
+						$('#email').css({
+							'border-color':red,
+							'color':red
+						});
+					}
+					$('#end').html('WHEN BETA BEGINS, YOU’RE IN.');
+					$('#end').css({
+						'margin-top':-30,
+						'color':darkColor,
+						'cursor':'default'
+					});
+				});
+			}
+			function clearError(){
+				if($('#email').val().indexOf(invalidEmailMessage) > -1){
+					$('#email').val('')
+				}
+				$('#email').css({
+					'border-color':borderColor,
+					'color':darkColor,
+				})
+			}
+			function validateEmail($email) {
+				var emailReg = /^([\w-\.]+@([\w-]+\.)+[\w-]{2,4})?$/;
+				if( !emailReg.test( $email ) ) {
+					return false;
+				} else {
+					return true;
+				}
+			}			
+			function pageResize (e) {
+				if(win.width() < 768){
+					smallScreen = true;
+				}else{
+					smallScreen = false;
+				}
+				WIN_HEIGHT = win.height();
+				WIN_WIDTH = win.width();
+				TRACK_DA = $('#track').width()-($("#scrubber").width()/1.2); // draggable area
+				initialized = true;
+				if(!touchEnabled){
+					moveScrubber(0,0);
+				}
+				if(!smallScreen){
+					if(transform3d){
+						$('#facts-holder').css({height:WIN_HEIGHT-300});
+					}else{
+						$('#facts-holder').css({height:WIN_HEIGHT-333});
+					}
+				}else{
+					$('#facts-holder').css({height:WIN_HEIGHT});
+					$('#friends').html('HEY FRIEND, DOWN HERE')
+				}
+				if(WIN_WIDTH < 1054){
+					$('#email-us a').html('EMAIL US')
+				}else{
+					$('#email-us a').html('HELLO@WUHUTRAVEL.COM')
+				}
+			}
+			function keyHandler (argument) {
+				clearError();
+				if(argument.keyCode==38 || argument.keyCode==37){
+					prev();
+				}else if(argument.keyCode==40 || argument.keyCode==39){
+					next();
+				}else{
+					return;
+				}
+			}
+			function next(){
+				if(8-currentMessage-2==-1){
+					$('#last-marker').click();
+				}else if(currentMessage != 8){
+					$('.marker').eq(8-currentMessage-2).click();
+				}
+			}
+			function prev(){
+				if(currentMessage!=0){
+					$('.marker').eq(8-currentMessage).click();
+				}
+			}
+			function moveScrubber (scrubMX,mouseX) {
+				targX = mouseX-$('#track').offset().left-scrubMX;
+				targX = Math.max(targX,0);
+				targX = Math.min(targX,TRACK_DA);
+			}
+			setInterval(function(){
+				$("#scrubber").css({
+					left:targX,
+				});
+				xLoc = targX/TRACK_DA;
+				$('#drag-labels').css({
+					top:xLoc*-$('.drag-label').eq(0).position().top
+				})				
+				if(transform3d){
+					for (var i = numMessages; i >= 0; i--) {
+						zLocTarg = ((xLoc*2840)+(i*-355));
+						var zLoc = Math.round($('.fact').eq(i).data('zLoc'));
+						var opacity = Math.min(1/Math.abs(zLoc/20),1);
+						$('.fact').eq(i).data('zLoc',zLoc+(.5*(zLocTarg-zLoc)));
+						if(transform3d){
+							$('.fact').eq(i).css({
+								'-webkit-transform':'translateZ('+zLoc+'px) rotateX('+-zLoc/30+'deg)',
+								'-moz-transform':'translateZ('+zLoc+'px)',
+								'-ms-transform':'translateZ('+zLoc+'px)',
+								'transform':'translateZ('+zLoc+'px)',
+								'opacity':opacity*(opacity/.07)
+							})
+						}			
+					};					
+				}else{
+					$('#facts').css({
+						top:xLoc*-$('.drag-label').eq(0).position().top*10.85
+					})	
+				}	
+				currentMessage = Math.round(numMessages*(zLocTarg/2840));
+			},30);
+		}
+	};
+	events.init();
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
